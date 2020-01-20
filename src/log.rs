@@ -15,7 +15,7 @@ use regex::Regex;
 use data::{Entry, Hint};
 use errors::{Error, Result};
 use file_pool::FilePool;
-use util::{Sequence, XxHash32, get_file_handle, human_readable_byte_count, xxhash32};
+use util::{get_file_handle, human_readable_byte_count, xxhash32, Sequence, XxHash32};
 
 const DATA_FILE_EXTENSION: &'static str = "cask.data";
 const HINT_FILE_EXTENSION: &'static str = "cask.hint";
@@ -85,14 +85,13 @@ impl Log {
     }
 
     pub fn file_size(&self, file_id: u32) -> Result<u64> {
-        let data_file = self.file_pool
+        let data_file = self
+            .file_pool
             .lock()
             .unwrap()
             .get(file_id)
             .map(Ok)
-            .unwrap_or_else(|| {
-                get_file_handle(&get_data_file_path(&self.path, file_id), false)
-            })?;
+            .unwrap_or_else(|| get_file_handle(&get_data_file_path(&self.path, file_id), false))?;
 
         let res = Ok(data_file.metadata()?.len());
 
@@ -148,14 +147,13 @@ impl Log {
     }
 
     pub fn read_entry<'a>(&self, file_id: u32, entry_pos: u64) -> Result<Entry<'a>> {
-        let mut data_file = self.file_pool
+        let mut data_file = self
+            .file_pool
             .lock()
             .unwrap()
             .get(file_id)
             .map(Ok)
-            .unwrap_or_else(|| {
-                get_file_handle(&get_data_file_path(&self.path, file_id), false)
-            })?;
+            .unwrap_or_else(|| get_file_handle(&get_data_file_path(&self.path, file_id), false))?;
 
         data_file.seek(SeekFrom::Start(entry_pos))?;
         let res = Entry::from_read(&mut data_file);
@@ -197,9 +195,10 @@ impl Log {
 
     pub fn swap_files(&mut self, old_files: &[u32], new_files: &[u32]) -> Result<()> {
         for &file_id in old_files {
-            let idx = self.files.binary_search(&file_id).map_err(|_| {
-                Error::InvalidFileId(file_id)
-            })?;
+            let idx = self
+                .files
+                .binary_search(&file_id)
+                .map_err(|_| Error::InvalidFileId(file_id))?;
 
             self.files.remove(idx);
 
@@ -248,7 +247,6 @@ impl LogWriter {
         max_file_size: usize,
         file_id_seq: Arc<Sequence>,
     ) -> LogWriter {
-
         LogWriter {
             path: path.to_path_buf(),
             sync: sync,
@@ -280,29 +278,30 @@ impl LogWriter {
     }
 
     pub fn write(&mut self, entry: &Entry) -> Result<LogWrite> {
-        Ok(if self.entry_writer.is_none() || // FIXME: clean up
+        Ok(
+            if self.entry_writer.is_none() || // FIXME: clean up
               self.entry_writer.as_ref().unwrap().data_file_pos + entry.size() >
               self.max_file_size as u64
-        {
+            {
+                if self.entry_writer.is_some() {
+                    info!(
+                        "Data file {:?} reached file limit of {}",
+                        self.entry_writer.as_ref().unwrap().data_file_path,
+                        human_readable_byte_count(self.max_file_size, true)
+                    );
+                }
 
-            if self.entry_writer.is_some() {
-                info!(
-                    "Data file {:?} reached file limit of {}",
-                    self.entry_writer.as_ref().unwrap().data_file_path,
-                    human_readable_byte_count(self.max_file_size, true)
-                );
-            }
+                let file_id = self.new_entry_writer()?;
+                let entry_pos = self.entry_writer.as_mut().unwrap().write(entry)?;
 
-            let file_id = self.new_entry_writer()?;
-            let entry_pos = self.entry_writer.as_mut().unwrap().write(entry)?;
+                assert_eq!(entry_pos, 0);
 
-            assert_eq!(entry_pos, 0);
-
-            LogWrite::NewFile(file_id)
-        } else {
-            let entry_pos = self.entry_writer.as_mut().unwrap().write(entry)?;
-            LogWrite::Ok(entry_pos)
-        })
+                LogWrite::NewFile(file_id)
+            } else {
+                let entry_pos = self.entry_writer.as_mut().unwrap().write(entry)?;
+                LogWrite::Ok(entry_pos)
+            },
+        )
     }
 
     pub fn sync(&self) -> Result<()> {
@@ -388,9 +387,9 @@ impl HintWriter {
 
 impl Drop for HintWriter {
     fn drop(&mut self) {
-        let _ = self.hint_file.write_u32::<LittleEndian>(
-            self.hint_file_hasher.get(),
-        );
+        let _ = self
+            .hint_file
+            .write_u32::<LittleEndian>(self.hint_file_hasher.get());
     }
 }
 
@@ -484,8 +483,7 @@ fn find_data_files(path: &Path) -> Result<Vec<u32>> {
     let files = fs::read_dir(path)?;
 
     lazy_static! {
-        static ref RE: Regex =
-            Regex::new(&format!("(\\d+).{}$", DATA_FILE_EXTENSION)).unwrap();
+        static ref RE: Regex = Regex::new(&format!("(\\d+).{}$", DATA_FILE_EXTENSION)).unwrap();
     }
 
     let mut data_files = Vec::new();
@@ -495,9 +493,8 @@ fn find_data_files(path: &Path) -> Result<Vec<u32>> {
         if file.metadata()?.is_file() {
             let file_name = file.file_name();
             let captures = RE.captures(file_name.to_str().unwrap());
-            if let Some(n) = captures.and_then(|c| {
-                c.get(1).and_then(|n| n.as_str().parse::<u32>().ok())
-            })
+            if let Some(n) =
+                captures.and_then(|c| c.get(1).and_then(|n| n.as_str().parse::<u32>().ok()))
             {
                 data_files.push(n)
             }
@@ -510,30 +507,26 @@ fn find_data_files(path: &Path) -> Result<Vec<u32>> {
 }
 
 fn is_valid_hint_file(path: &Path) -> Result<bool> {
-    Ok(
-        path.is_file() &&
-            {
-                let mut hint_file = get_file_handle(path, false)?;
+    Ok(path.is_file() && {
+        let mut hint_file = get_file_handle(path, false)?;
 
-                // FIXME: avoid reading the whole hint file into memory;
-                let mut buf = Vec::new();
-                hint_file.read_to_end(&mut buf)?;
+        // FIXME: avoid reading the whole hint file into memory;
+        let mut buf = Vec::new();
+        hint_file.read_to_end(&mut buf)?;
 
-                buf.len() >= 4 &&
-                    {
-                        let hash = xxhash32(&buf[..buf.len() - 4]);
+        buf.len() >= 4 && {
+            let hash = xxhash32(&buf[..buf.len() - 4]);
 
-                        let mut cursor = Cursor::new(&buf[buf.len() - 4..]);
-                        let checksum = cursor.read_u32::<LittleEndian>()?;
+            let mut cursor = Cursor::new(&buf[buf.len() - 4..]);
+            let checksum = cursor.read_u32::<LittleEndian>()?;
 
-                        let valid = hash == checksum;
+            let valid = hash == checksum;
 
-                        if !valid {
-                            warn!("Found corrupt hint file: {:?}", &path);
-                        }
+            if !valid {
+                warn!("Found corrupt hint file: {:?}", &path);
+            }
 
-                        valid
-                    }
-            },
-    )
+            valid
+        }
+    })
 }

@@ -1,5 +1,5 @@
-use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 
 pub struct FilePool {

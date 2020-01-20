@@ -10,8 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use env_logger::LogBuilder;
-use rand::{Rng, SeedableRng, XorShiftRng};
 use log::LogRecord;
+use rand::{Rng, SeedableRng, XorShiftRng};
 
 use cask::CaskOptions;
 

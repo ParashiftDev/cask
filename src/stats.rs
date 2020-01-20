@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry as HashMapEntry;
+use std::collections::HashMap;
 
 use cask::IndexEntry;
 
@@ -17,7 +17,9 @@ pub struct Stats {
 
 impl Stats {
     pub fn new() -> Stats {
-        Stats { map: HashMap::new() }
+        Stats {
+            map: HashMap::new(),
+        }
     }
 
     pub fn add_entry(&mut self, entry: &IndexEntry) {

@@ -6,7 +6,7 @@ use std::result::Result::{Err, Ok};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use errors::{Error, Result};
-use util::{XxHash32, xxhash32};
+use util::{xxhash32, XxHash32};
 
 const ENTRY_STATIC_SIZE: usize = 18; // checksum(4) + sequence(8) + key_size(2) + value_size(4)
 const ENTRY_TOMBSTONE: u32 = !0;
@@ -149,9 +149,7 @@ impl<'a> Entry<'a> {
         };
 
         Ok(Entry {
-            key: Cow::from(
-                &bytes[ENTRY_STATIC_SIZE..ENTRY_STATIC_SIZE + key_size as usize],
-            ),
+            key: Cow::from(&bytes[ENTRY_STATIC_SIZE..ENTRY_STATIC_SIZE + key_size as usize]),
             value: value,
             sequence: sequence,
             deleted: value_size == ENTRY_TOMBSTONE,
